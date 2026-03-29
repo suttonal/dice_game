@@ -3,7 +3,8 @@ import random
 import json
 
 app = Flask(__name__)
-app.secret_key = 'yahtzee-secret-key-2024'
+import os
+app.secret_key = os.environ.get('SECRET_KEY', 'dev-fallback-key')
 
 SCORE_CATEGORIES = [
     'ones', 'twos', 'threes', 'fours', 'fives', 'sixes',
