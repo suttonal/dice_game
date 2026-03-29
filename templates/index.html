@@ -1,1 +1,112 @@
-<p>Empy File</p>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YAHTZEE</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Mono:wght@400;500&family=Crimson+Pro:ital,wght@0,400;1,400&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="felt-bg"></div>
+    <div class="grain"></div>
+
+    <div class="app">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-inner">
+                <div class="logo">
+                    <span class="logo-y">Y</span><span class="logo-rest">AHTZEE</span>
+                </div>
+                <div class="round-info">
+                    <span class="round-label">ROUND</span>
+                    <span class="round-num" id="roundNum">1</span>
+                    <span class="round-label">OF 13</span>
+                </div>
+                <button class="btn-new" onclick="newGame()">NEW GAME</button>
+            </div>
+        </header>
+
+        <main class="main">
+            <!-- Dice Area -->
+            <section class="dice-section">
+                <div class="dice-tray">
+                    <div class="tray-label">DICE TRAY</div>
+                    <div class="dice-row" id="diceRow">
+                        <!-- Dice rendered by JS -->
+                    </div>
+                    <div class="hold-hints" id="holdHints" style="display:none">
+                        Click dice to hold / release
+                    </div>
+                </div>
+
+                <div class="roll-area">
+                    <div class="rolls-indicator">
+                        <div class="pip-row" id="pipRow">
+                            <div class="pip active" id="pip0"></div>
+                            <div class="pip active" id="pip1"></div>
+                            <div class="pip active" id="pip2"></div>
+                        </div>
+                        <div class="rolls-label" id="rollsLabel">3 ROLLS LEFT</div>
+                    </div>
+                    <button class="btn-roll" id="rollBtn" onclick="rollDice()">
+                        <span class="btn-roll-text">ROLL</span>
+                        <span class="btn-roll-sub">Click to roll all free dice</span>
+                    </button>
+                </div>
+            </section>
+
+            <!-- Score Section -->
+            <section class="score-section">
+                <div class="scorecard">
+                    <div class="scorecard-header">SCORECARD</div>
+
+                    <div class="score-group">
+                        <div class="group-title">UPPER SECTION</div>
+                        <div class="score-rows" id="upperRows">
+                            <!-- Rendered by JS -->
+                        </div>
+                        <div class="bonus-row">
+                            <div class="bonus-label">
+                                <span>BONUS</span>
+                                <span class="bonus-note">63+ = +35</span>
+                            </div>
+                            <div class="bonus-progress">
+                                <div class="bonus-bar-bg">
+                                    <div class="bonus-bar-fill" id="bonusBarFill"></div>
+                                </div>
+                                <span class="bonus-val" id="bonusVal">0 / 63</span>
+                            </div>
+                            <div class="score-cell bonus-score" id="bonusScore">—</div>
+                        </div>
+                    </div>
+
+                    <div class="score-group">
+                        <div class="group-title">LOWER SECTION</div>
+                        <div class="score-rows" id="lowerRows"></div>
+                    </div>
+
+                    <div class="total-row">
+                        <span class="total-label">GRAND TOTAL</span>
+                        <span class="total-score" id="totalScore">0</span>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Game Over Modal -->
+    <div class="modal-overlay" id="gameOverModal" style="display:none">
+        <div class="modal">
+            <div class="modal-title">GAME OVER</div>
+            <div class="modal-score-label">FINAL SCORE</div>
+            <div class="modal-score" id="modalScore">0</div>
+            <div class="modal-rating" id="modalRating"></div>
+            <button class="btn-new modal-btn" onclick="newGame()">PLAY AGAIN</button>
+        </div>
+    </div>
+
+    <script src="/static/js/game.js"></script>
+</body>
+</html>
