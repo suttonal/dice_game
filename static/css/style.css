@@ -1,240 +1,349 @@
-// ---- CONFIG ----
-const UPPER = ['ones','twos','threes','fours','fives','sixes'];
-const LOWER = ['three_of_a_kind','four_of_a_kind','full_house','small_straight','large_straight','yahtzee','chance'];
-
-const LABELS = {
-    ones: 'Ones', twos: 'Twos', threes: 'Threes', fours: 'Fours', fives: 'Fives', sixes: 'Sixes',
-    three_of_a_kind: 'Three of a Kind', four_of_a_kind: 'Four of a Kind',
-    full_house: 'Full House', small_straight: 'Sm. Straight',
-    large_straight: 'Lg. Straight', yahtzee: 'Yahtzee!', chance: 'Chance'
-};
-const HINTS = {
-    ones: 'Sum of 1s', twos: 'Sum of 2s', threes: 'Sum of 3s',
-    fours: 'Sum of 4s', fives: 'Sum of 5s', sixes: 'Sum of 6s',
-    three_of_a_kind: 'Sum all', four_of_a_kind: 'Sum all',
-    full_house: '25 pts', small_straight: '30 pts',
-    large_straight: '40 pts', yahtzee: '50 pts', chance: 'Sum all'
-};
-
-// ---- STATE ----
-let gameState = null;
-
-// ---- SVG DICE ----
-function dieFace(value) {
-    const dotColor = '#1a1a1a';
-    const dots = {
-        1: [[25,25]],
-        2: [[12,12],[38,38]],
-        3: [[12,12],[25,25],[38,38]],
-        4: [[12,12],[38,12],[12,38],[38,38]],
-        5: [[12,12],[38,12],[25,25],[12,38],[38,38]],
-        6: [[12,12],[38,12],[12,25],[38,25],[12,38],[38,38]]
-    };
-    const positions = dots[value] || dots[1];
-    const circles = positions.map(([cx, cy]) =>
-        `<circle cx="${cx}" cy="${cy}" r="4.5" fill="${dotColor}"/>`
-    ).join('');
-    return `<svg viewBox="0 0 50 50" xmlns="http://www.w3.org/2000/svg">${circles}</svg>`;
+:root {
+    --felt: #0d3b2e;
+    --felt-light: #145c45;
+    --felt-dark: #081f18;
+    --gold: #c9a84c;
+    --gold-light: #e8c97a;
+    --gold-dark: #9a7a30;
+    --cream: #f5edd8;
+    --cream-dim: #c8bfa8;
+    --red: #b8302a;
+    --red-light: #e04040;
+    --white: #ffffff;
+    --shadow: rgba(0,0,0,0.6);
+    --dice-bg: #f8f3e8;
+    --dice-dot: #1a1a1a;
+    --held-glow: #c9a84c;
 }
 
-// ---- RENDER DICE ----
-function renderDice(state) {
-    const row = document.getElementById('diceRow');
-    const hints = document.getElementById('holdHints');
-    const canHold = state.rolled_this_turn && state.rolls_left > 0 && !state.game_over;
-    hints.style.display = canHold ? 'block' : 'none';
+* { margin: 0; padding: 0; box-sizing: border-box; }
 
-    row.innerHTML = state.dice.map((val, i) => {
-        const held = state.held[i];
-        const holdable = canHold;
-        const rolling = !held && state.just_rolled;
-        return `
-        <div class="die-wrap ${holdable ? 'holdable' : ''} ${held ? 'held' : ''} ${rolling ? 'rolling' : ''}" 
-             id="die${i}" onclick="${holdable ? `toggleHold(${i})` : ''}">
-            <div class="die">${dieFace(val)}</div>
-            <div class="hold-label ${held ? 'on' : 'off'}">${held ? 'HELD' : 'HELD'}</div>
-        </div>`;
-    }).join('');
+body {
+    font-family: 'DM Mono', monospace;
+    min-height: 100vh;
+    background: var(--felt-dark);
+    color: var(--cream);
+    overflow-x: hidden;
 }
 
-// ---- RENDER ROLL BUTTON ----
-function renderRollBtn(state) {
-    const btn = document.getElementById('rollBtn');
-    const disabled = state.rolls_left <= 0 || state.game_over;
-    btn.disabled = disabled;
-
-    const labels = {3: 'ROLL', 2: 'RE-ROLL', 1: 'LAST ROLL'};
-    document.querySelector('.btn-roll-text').textContent = labels[state.rolls_left] || 'ROLL';
-
-    // Pips
-    for (let i = 0; i < 3; i++) {
-        const pip = document.getElementById(`pip${i}`);
-        pip.classList.toggle('active', i < state.rolls_left);
-    }
-    const label = document.getElementById('rollsLabel');
-    const r = state.rolls_left;
-    label.textContent = r === 0 ? 'NO ROLLS LEFT' : `${r} ROLL${r !== 1 ? 'S' : ''} LEFT`;
+.felt-bg {
+    position: fixed; inset: 0; z-index: 0;
+    background: 
+        radial-gradient(ellipse at 30% 20%, #1a5c42 0%, transparent 50%),
+        radial-gradient(ellipse at 70% 80%, #0f4a35 0%, transparent 50%),
+        radial-gradient(ellipse at 50% 50%, #0d3b2e 0%, #051a12 100%);
 }
 
-// ---- RENDER SCORECARD ----
-function renderScorecard(state, potentials = {}) {
-    document.getElementById('roundNum').textContent = Math.min(state.current_round, 13);
-
-    renderGroup('upperRows', UPPER, state, potentials);
-    renderGroup('lowerRows', LOWER, state, potentials);
-
-    // Bonus bar
-    const upperScore = UPPER.reduce((s, c) => s + (state.scores[c] || 0), 0);
-    const pct = Math.min(100, (upperScore / 63) * 100);
-    document.getElementById('bonusBarFill').style.width = pct + '%';
-    document.getElementById('bonusVal').textContent = `${upperScore} / 63`;
-    const bonusEl = document.getElementById('bonusScore');
-    if (upperScore >= 63) {
-        bonusEl.textContent = '+35';
-        bonusEl.className = 'score-cell bonus-score locked';
-    } else {
-        bonusEl.textContent = '—';
-        bonusEl.className = 'score-cell bonus-score empty';
-    }
-
-    // Total
-    const bonus = upperScore >= 63 ? 35 : 0;
-    const lowerScore = LOWER.reduce((s, c) => s + (state.scores[c] || 0), 0);
-    document.getElementById('totalScore').textContent = upperScore + bonus + lowerScore;
+.grain {
+    position: fixed; inset: 0; z-index: 1; pointer-events: none; opacity: 0.04;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
 }
 
-function renderGroup(containerId, cats, state, potentials) {
-    const container = document.getElementById(containerId);
-    container.innerHTML = cats.map(cat => {
-        const scored = state.scores[cat] !== null && state.scores[cat] !== undefined;
-        const potential = !scored && potentials[cat] !== undefined;
-        const available = !scored && state.rolled_this_turn && !state.game_over;
+.app { position: relative; z-index: 2; min-height: 100vh; display: flex; flex-direction: column; }
 
-        let cellContent = '—';
-        let cellClass = 'empty';
+/* HEADER */
+.header {
+    border-bottom: 2px solid var(--gold-dark);
+    background: linear-gradient(180deg, rgba(0,0,0,0.4) 0%, transparent 100%);
+    padding: 12px 0;
+}
+.header-inner {
+    max-width: 900px; margin: 0 auto; padding: 0 24px;
+    display: flex; align-items: center; justify-content: space-between;
+}
+.logo {
+    font-family: 'Playfair Display', serif;
+    font-size: 2.4rem; font-weight: 900; letter-spacing: 0.08em;
+    line-height: 1;
+}
+.logo-y { color: var(--gold); text-shadow: 0 0 20px rgba(201,168,76,0.5); }
+.logo-rest { color: var(--cream); }
 
-        if (scored) {
-            cellContent = state.scores[cat];
-            cellClass = 'locked';
-        } else if (potential) {
-            cellContent = potentials[cat] > 0 ? `+${potentials[cat]}` : '0';
-            cellClass = potentials[cat] > 0 ? 'potential' : 'zero';
-        }
+.round-info { display: flex; align-items: center; gap: 8px; }
+.round-label { font-size: 0.65rem; letter-spacing: 0.15em; color: var(--cream-dim); }
+.round-num { font-size: 1.6rem; font-weight: 500; color: var(--gold-light); min-width: 2ch; text-align: center; }
 
-        return `
-        <div class="score-row ${scored ? 'scored' : ''} ${available ? 'available' : ''} ${potential && !scored ? 'preview' : ''}"
-             onclick="${available ? `scoreCategory('${cat}')` : ''}">
-            <div>
-                <div class="score-name">${LABELS[cat]}</div>
-                ${!scored ? `<div class="score-hint">${HINTS[cat]}</div>` : ''}
-            </div>
-            <div></div>
-            <div class="score-cell ${cellClass}">${cellContent}</div>
-        </div>`;
-    }).join('');
+.btn-new {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.7rem; letter-spacing: 0.12em; font-weight: 500;
+    padding: 8px 18px;
+    background: transparent; color: var(--cream-dim);
+    border: 1px solid rgba(201,168,76,0.3);
+    border-radius: 2px; cursor: pointer;
+    transition: all 0.2s;
+}
+.btn-new:hover { color: var(--gold); border-color: var(--gold); }
+
+/* MAIN LAYOUT */
+.main {
+    max-width: 900px; margin: 0 auto; padding: 24px;
+    display: grid; grid-template-columns: 1fr 340px; gap: 24px;
+    flex: 1;
 }
 
-// ---- API CALLS ----
-async function newGame() {
-    const res = await fetch('/api/new_game', { method: 'POST' });
-    gameState = await res.json();
-    gameState.just_rolled = false;
-    document.getElementById('gameOverModal').style.display = 'none';
-    render();
+/* DICE SECTION */
+.dice-section {
+    display: flex; flex-direction: column; gap: 20px;
 }
 
-async function rollDice() {
-    if (!gameState || gameState.rolls_left <= 0 || gameState.game_over) return;
-    
-    // Animate unhelds
-    for (let i = 0; i < 5; i++) {
-        if (!gameState.held[i]) {
-            const el = document.getElementById(`die${i}`);
-            if (el) { el.classList.remove('rolling'); void el.offsetWidth; el.classList.add('rolling'); }
-        }
-    }
-
-    const res = await fetch('/api/roll', { method: 'POST' });
-    const data = await res.json();
-    gameState = { ...data, just_rolled: true };
-    
-    setTimeout(() => render(), 50);
+.dice-tray {
+    background: rgba(0,0,0,0.3);
+    border: 1px solid rgba(201,168,76,0.2);
+    border-radius: 12px; padding: 24px;
+    position: relative;
+}
+.tray-label {
+    font-size: 0.6rem; letter-spacing: 0.2em; color: var(--gold-dark);
+    position: absolute; top: 10px; left: 16px;
 }
 
-async function toggleHold(index) {
-    if (!gameState || !gameState.rolled_this_turn || gameState.rolls_left <= 0) return;
-    const res = await fetch('/api/toggle_hold', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ index })
-    });
-    gameState = { ...(await res.json()), just_rolled: false };
-    
-    // Recalculate potentials from last roll (kept in current state)
-    const potRes = await fetch('/api/get_state');
-    const fullState = await potRes.json();
-    render(fullState.potential_scores);
+.dice-row {
+    display: flex; gap: 14px; justify-content: center;
+    padding: 8px 0;
 }
 
-async function scoreCategory(category) {
-    if (!gameState || !gameState.rolled_this_turn) return;
-    const res = await fetch('/api/score', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ category })
-    });
-    const data = await res.json();
-    gameState = { ...data, just_rolled: false };
-    render();
+/* DICE */
+.die-wrap {
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    cursor: default;
+}
+.die-wrap.holdable { cursor: pointer; }
 
-    if (data.game_over) showGameOver(data);
+.die {
+    width: 74px; height: 74px;
+    background: var(--dice-bg);
+    border-radius: 14px;
+    display: grid; place-items: center;
+    position: relative;
+    box-shadow: 
+        inset 0 2px 4px rgba(255,255,255,0.8),
+        inset 0 -2px 4px rgba(0,0,0,0.15),
+        0 6px 16px rgba(0,0,0,0.5),
+        0 2px 4px rgba(0,0,0,0.3);
+    transition: transform 0.15s, box-shadow 0.15s;
+    user-select: none;
+}
+.die-wrap.holdable .die:hover {
+    transform: translateY(-3px);
+    box-shadow: 
+        inset 0 2px 4px rgba(255,255,255,0.8),
+        inset 0 -2px 4px rgba(0,0,0,0.15),
+        0 10px 24px rgba(0,0,0,0.5),
+        0 2px 4px rgba(0,0,0,0.3);
 }
 
-// ---- RENDER ----
-function render(potentials = null) {
-    if (!gameState) return;
-    renderDice(gameState);
-    renderRollBtn(gameState);
-    
-    if (potentials === null && gameState.rolled_this_turn) {
-        fetch('/api/get_state').then(r => r.json()).then(s => {
-            renderScorecard(gameState, s.potential_scores || {});
-        });
-    } else {
-        renderScorecard(gameState, potentials || {});
-    }
+.die-wrap.held .die {
+    box-shadow: 
+        inset 0 2px 4px rgba(255,255,255,0.8),
+        inset 0 -2px 4px rgba(0,0,0,0.15),
+        0 6px 16px rgba(0,0,0,0.5),
+        0 0 0 3px var(--gold),
+        0 0 20px rgba(201,168,76,0.6);
+    background: #fffbf0;
 }
 
-// ---- GAME OVER ----
-function showGameOver(data) {
-    const upper = UPPER.reduce((s, c) => s + (data.scores[c] || 0), 0);
-    const bonus = upper >= 63 ? 35 : 0;
-    const lower = LOWER.reduce((s, c) => s + (data.scores[c] || 0), 0);
-    const total = upper + bonus + lower;
+.hold-label {
+    font-size: 0.55rem; letter-spacing: 0.15em; font-weight: 500;
+    height: 14px;
+    transition: opacity 0.2s;
+}
+.hold-label.on { color: var(--gold); opacity: 1; }
+.hold-label.off { color: transparent; opacity: 0; }
 
-    document.getElementById('modalScore').textContent = total;
-    
-    let rating;
-    if (total >= 350) rating = 'Legendary — Pure Dice Mastery';
-    else if (total >= 300) rating = 'Excellent — Outstanding Play';
-    else if (total >= 250) rating = 'Great — Above Average';
-    else if (total >= 200) rating = 'Good — Solid Performance';
-    else if (total >= 150) rating = 'Average — Room to Improve';
-    else rating = 'Keep Practicing — Better Luck Next Time';
-    
-    document.getElementById('modalRating').textContent = rating;
-    document.getElementById('gameOverModal').style.display = 'flex';
+/* SVG dice faces */
+.die svg { width: 48px; height: 48px; }
+
+.die-wrap.rolling .die {
+    animation: shake 0.4s ease;
+}
+@keyframes shake {
+    0% { transform: rotate(0deg) scale(1); }
+    15% { transform: rotate(-8deg) scale(0.95) translateY(-4px); }
+    30% { transform: rotate(6deg) scale(1.05) translateY(-6px); }
+    45% { transform: rotate(-5deg) scale(0.97) translateY(-3px); }
+    60% { transform: rotate(4deg) scale(1.02) translateY(-2px); }
+    75% { transform: rotate(-2deg) scale(0.99); }
+    100% { transform: rotate(0deg) scale(1); }
 }
 
-// ---- INIT ----
-window.addEventListener('load', async () => {
-    const res = await fetch('/api/get_state');
-    const data = await res.json();
-    gameState = { ...data, just_rolled: false };
-    render(data.potential_scores);
-    
-    // If fresh session, start a new game
-    if (gameState.current_round === 1 && !gameState.rolled_this_turn) {
-        // Game already initialized
-    }
-});
+.hold-hints {
+    text-align: center;
+    font-size: 0.6rem; letter-spacing: 0.1em; color: var(--cream-dim);
+    margin-top: 8px; opacity: 0.7;
+}
+
+/* ROLL AREA */
+.roll-area {
+    display: flex; align-items: center; gap: 20px;
+    background: rgba(0,0,0,0.25);
+    border: 1px solid rgba(201,168,76,0.15);
+    border-radius: 12px; padding: 20px 24px;
+}
+
+.rolls-indicator { flex: 1; display: flex; flex-direction: column; gap: 10px; align-items: center; }
+.pip-row { display: flex; gap: 8px; }
+.pip {
+    width: 16px; height: 16px; border-radius: 50%;
+    background: var(--gold-dark); opacity: 0.3;
+    transition: opacity 0.3s, background 0.3s, box-shadow 0.3s;
+}
+.pip.active {
+    opacity: 1; background: var(--gold);
+    box-shadow: 0 0 12px rgba(201,168,76,0.7);
+}
+.rolls-label { font-size: 0.65rem; letter-spacing: 0.12em; color: var(--cream-dim); }
+
+.btn-roll {
+    font-family: 'Playfair Display', serif;
+    padding: 16px 40px;
+    background: linear-gradient(135deg, var(--gold-dark) 0%, var(--gold) 50%, var(--gold-dark) 100%);
+    color: var(--felt-dark); border: none; border-radius: 8px;
+    cursor: pointer; position: relative; overflow: hidden;
+    box-shadow: 0 4px 16px rgba(201,168,76,0.4), 0 2px 4px rgba(0,0,0,0.3);
+    transition: all 0.2s; display: flex; flex-direction: column; align-items: center;
+}
+.btn-roll:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(201,168,76,0.5), 0 2px 4px rgba(0,0,0,0.3);
+}
+.btn-roll:active:not(:disabled) { transform: translateY(0); }
+.btn-roll:disabled {
+    opacity: 0.4; cursor: not-allowed;
+    box-shadow: none;
+}
+.btn-roll-text { font-size: 1.4rem; font-weight: 700; letter-spacing: 0.12em; line-height: 1; }
+.btn-roll-sub { font-family: 'DM Mono', monospace; font-size: 0.55rem; letter-spacing: 0.08em; opacity: 0.7; margin-top: 3px; }
+
+/* SCORE SECTION */
+.score-section { display: flex; flex-direction: column; }
+
+.scorecard {
+    background: rgba(0,0,0,0.4);
+    border: 1px solid rgba(201,168,76,0.25);
+    border-radius: 12px; overflow: hidden;
+    flex: 1;
+}
+.scorecard-header {
+    background: linear-gradient(135deg, rgba(201,168,76,0.2), rgba(201,168,76,0.05));
+    padding: 12px 16px;
+    font-size: 0.65rem; letter-spacing: 0.2em; color: var(--gold);
+    border-bottom: 1px solid rgba(201,168,76,0.2);
+    text-align: center;
+}
+
+.score-group { border-bottom: 1px solid rgba(201,168,76,0.1); }
+.group-title {
+    padding: 8px 16px 6px;
+    font-size: 0.55rem; letter-spacing: 0.2em; color: var(--gold-dark);
+}
+
+.score-row {
+    display: grid; grid-template-columns: 1fr auto auto;
+    align-items: center; padding: 5px 16px;
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+    transition: background 0.15s;
+    gap: 8px;
+}
+.score-row:last-child { border-bottom: none; }
+.score-row.available { cursor: pointer; }
+.score-row.available:hover { background: rgba(201,168,76,0.08); }
+.score-row.scored { opacity: 0.7; }
+.score-row.preview { background: rgba(201,168,76,0.05); }
+
+.score-name {
+    font-size: 0.65rem; letter-spacing: 0.05em; color: var(--cream-dim);
+}
+.score-row.scored .score-name { color: var(--cream); }
+
+.score-hint {
+    font-size: 0.5rem; color: rgba(255,255,255,0.2); letter-spacing: 0.05em;
+    font-style: italic;
+}
+
+.score-cell {
+    font-size: 0.75rem; font-weight: 500;
+    min-width: 28px; text-align: right;
+}
+.score-cell.locked { color: var(--cream); }
+.score-cell.potential { color: var(--gold); opacity: 0.8; }
+.score-cell.zero { color: var(--red-light); opacity: 0.5; }
+.score-cell.empty { color: rgba(255,255,255,0.15); }
+
+/* BONUS ROW */
+.bonus-row {
+    display: grid; grid-template-columns: 1fr auto auto;
+    align-items: center; padding: 8px 16px; gap: 8px;
+    background: rgba(0,0,0,0.2);
+    border-top: 1px solid rgba(201,168,76,0.1);
+}
+.bonus-label { display: flex; flex-direction: column; gap: 2px; }
+.bonus-label span:first-child { font-size: 0.6rem; letter-spacing: 0.1em; color: var(--gold-dark); }
+.bonus-note { font-size: 0.5rem; color: rgba(255,255,255,0.2); font-style: italic; }
+
+.bonus-progress { display: flex; flex-direction: column; gap: 4px; align-items: center; }
+.bonus-bar-bg {
+    width: 80px; height: 4px;
+    background: rgba(255,255,255,0.1); border-radius: 2px; overflow: hidden;
+}
+.bonus-bar-fill {
+    height: 100%; width: 0%; border-radius: 2px;
+    background: linear-gradient(90deg, var(--gold-dark), var(--gold));
+    transition: width 0.4s ease;
+}
+.bonus-val { font-size: 0.55rem; color: var(--cream-dim); letter-spacing: 0.05em; }
+.bonus-score { color: var(--gold); font-size: 0.8rem; }
+
+/* TOTAL ROW */
+.total-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 14px 16px;
+    background: linear-gradient(135deg, rgba(201,168,76,0.12), rgba(201,168,76,0.04));
+    border-top: 2px solid rgba(201,168,76,0.3);
+}
+.total-label { font-size: 0.65rem; letter-spacing: 0.2em; color: var(--gold); }
+.total-score {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.8rem; font-weight: 700; color: var(--gold-light);
+    text-shadow: 0 0 20px rgba(201,168,76,0.4);
+}
+
+/* MODAL */
+.modal-overlay {
+    position: fixed; inset: 0; z-index: 100;
+    background: rgba(0,0,0,0.8); backdrop-filter: blur(4px);
+    display: flex; align-items: center; justify-content: center;
+}
+.modal {
+    background: linear-gradient(135deg, #0d2820 0%, #0a1f18 100%);
+    border: 2px solid var(--gold-dark);
+    border-radius: 16px; padding: 48px 56px;
+    text-align: center;
+    box-shadow: 0 0 80px rgba(201,168,76,0.15), 0 40px 80px rgba(0,0,0,0.5);
+    animation: modalIn 0.4s cubic-bezier(0.34,1.56,0.64,1);
+}
+@keyframes modalIn {
+    from { opacity: 0; transform: scale(0.85) translateY(20px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+}
+.modal-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 2rem; font-weight: 900; letter-spacing: 0.15em; color: var(--gold);
+    margin-bottom: 24px;
+}
+.modal-score-label { font-size: 0.6rem; letter-spacing: 0.2em; color: var(--cream-dim); margin-bottom: 8px; }
+.modal-score {
+    font-family: 'Playfair Display', serif;
+    font-size: 4rem; font-weight: 700; color: var(--gold-light);
+    text-shadow: 0 0 30px rgba(201,168,76,0.6);
+    line-height: 1; margin-bottom: 12px;
+}
+.modal-rating { font-size: 0.75rem; letter-spacing: 0.1em; color: var(--cream-dim); margin-bottom: 32px; font-style: italic; }
+.modal-btn { font-size: 0.8rem; padding: 14px 40px; }
+
+/* RESPONSIVE */
+@media (max-width: 720px) {
+    .main { grid-template-columns: 1fr; padding: 16px; }
+    .logo { font-size: 1.8rem; }
+    .die { width: 60px; height: 60px; }
+    .die svg { width: 38px; height: 38px; }
+}
